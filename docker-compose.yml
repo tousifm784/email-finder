@@ -1,0 +1,86 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  db-init:
+    build: .
+    command: ["npm", "run", "db:push"]
+    environment:
+      DATABASE_URL: file:/data/signal.db
+    volumes:
+      - signal-data:/data
+
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: file:/data/signal.db
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      SEARCH_ENGINE_URL: ${SEARCH_ENGINE_URL:-}
+      SMTP_WORKER_URL: ${SMTP_WORKER_URL:-}
+      SMTP_WORKER_TOKEN: ${SMTP_WORKER_TOKEN:-}
+      SMTP_PROBING_ENABLED: ${SMTP_PROBING_ENABLED:-false}
+      SMTP_HELO_DOMAIN: ${SMTP_HELO_DOMAIN:-mail.example.com}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-verify@example.com}
+      SMTP_TIMEOUT_MS: ${SMTP_TIMEOUT_MS:-7000}
+      FALLBACK_PROVIDER: ${FALLBACK_PROVIDER:-}
+      MILLIONVERIFIER_API_KEY: ${MILLIONVERIFIER_API_KEY:-}
+      ZEROBOUNCE_API_KEY: ${ZEROBOUNCE_API_KEY:-}
+      HUNTER_API_KEY: ${HUNTER_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    volumes:
+      - signal-data:/data
+
+  worker:
+    build: .
+    command: ["npm", "run", "worker"]
+    environment:
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: file:/data/signal.db
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      SEARCH_ENGINE_URL: ${SEARCH_ENGINE_URL:-}
+      SMTP_WORKER_URL: ${SMTP_WORKER_URL:-}
+      SMTP_WORKER_TOKEN: ${SMTP_WORKER_TOKEN:-}
+      SMTP_PROBING_ENABLED: ${SMTP_PROBING_ENABLED:-false}
+      SMTP_HELO_DOMAIN: ${SMTP_HELO_DOMAIN:-mail.example.com}
+      SMTP_FROM_ADDRESS: ${SMTP_FROM_ADDRESS:-verify@example.com}
+      SMTP_TIMEOUT_MS: ${SMTP_TIMEOUT_MS:-7000}
+      FALLBACK_PROVIDER: ${FALLBACK_PROVIDER:-}
+      MILLIONVERIFIER_API_KEY: ${MILLIONVERIFIER_API_KEY:-}
+      ZEROBOUNCE_API_KEY: ${ZEROBOUNCE_API_KEY:-}
+      HUNTER_API_KEY: ${HUNTER_API_KEY:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    volumes:
+      - signal-data:/data
+
+volumes:
+  redis-data:
+  signal-data:
