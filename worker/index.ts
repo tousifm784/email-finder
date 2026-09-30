@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { Worker } from "bullmq";
 import Redis from "ioredis";
-import { discoverDomainPattern } from "@/lib/pattern-discovery";
 import { generatePermutations } from "@/lib/permutations";
 import { prisma } from "@/lib/prisma";
 import { verifyWithProvider } from "@/lib/provider-adapter";
@@ -44,32 +43,12 @@ const worker = new Worker<FindEmailJob, VerificationResult, VerificationProgress
           probes: [],
         };
       } else {
-      result = await verifyDomainAndCandidates(job.data.name, job.data.domain, (phase) => job.updateProgress(phase));
-      if (["risky", "pattern_prediction", "catch_all"].includes(result.status) && result.mxHost) {
-        const candidates = generatePermutations(job.data.name, job.data.domain);
-        const fallbackResult = await verifyWithProvider(result, candidates);
-        if (fallbackResult && ["deliverable", "undeliverable"].includes(fallbackResult.status)) result = fallbackResult;
-        else {
-          const discoveryBase = fallbackResult?.status === "catch_all" ? fallbackResult : result;
-          const discovery = await discoverDomainPattern(job.data.name, job.data.domain, discoveryBase.provider);
-          const predictions = [discovery.email, ...candidates.filter((email) => email !== discovery.email)];
-          const onlineMatch = discovery.confidenceLabel === "high";
-          result = {
-            ...discoveryBase,
-            email: discovery.email,
-            confidence: discovery.confidence,
-            badge: onlineMatch && discoveryBase.status !== "catch_all" ? "Pattern Verified (Online Match)" : discoveryBase.status === "catch_all" ? discoveryBase.badge : `Pattern Estimated (${discovery.confidence}%)`,
-            patternBadge: onlineMatch && discoveryBase.status === "catch_all" ? "Pattern Verified (Online Match)" : null,
-            predictions,
-            predictionStatuses: predictions.map(() => "predicted"),
-            pattern: discovery.formula,
-            observedEmails: discovery.observedEmails,
-            message: onlineMatch
-              ? `Found ${discovery.observedEmails.length} public ${discovery.pattern} addresses at this domain. This is pattern evidence, not mailbox verification.`
-              : `No matching public email pattern was found. ${discovery.pattern} is an MX-provider estimate, not a verified mailbox.`,
-          };
+        result = await verifyDomainAndCandidates(job.data.name, job.data.domain, (phase) => job.updateProgress(phase));
+        if (result.status === "risky" && result.mxHost) {
+          const candidates = generatePermutations(job.data.name, job.data.domain);
+          const providerResult = await verifyWithProvider(result, candidates);
+          if (providerResult) result = providerResult;
         }
-      }
       }
       await job.updateProgress("complete");
       await prisma.search.update({

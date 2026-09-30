@@ -54,19 +54,19 @@ export async function verifyWithProvider(
   for (const email of candidates) {
     const checked = await checkCandidate(provider, apiKey, email);
     const status = statusFor(checked.status);
-    probes.push({ email, code: status === "deliverable" ? 200 : status === "undeliverable" ? 550 : status === "catch_all" ? 250 : null, message: checked.response });
+    probes.push({ email, code: status === "deliverable" ? 200 : status === "undeliverable" ? 550 : status === "catch_all" ? 250 : null, message: checked.response, status: status === "deliverable" ? "deliverable" : status === "undeliverable" ? "invalid" : status === "catch_all" ? "catch_all" : "risky" });
     if (status === "deliverable" || status === "catch_all") {
       return {
         ...base,
         status,
-        email: status === "catch_all" ? candidates[0] : email,
+        email: status === "catch_all" ? null : email,
         confidence: status === "deliverable" ? 94 : 64,
         catchAll: status === "catch_all",
         badge: status === "catch_all"
           ? base.provider === "Custom mail server" ? "Catch-all / Predicted Pattern" : "Enterprise Protected / Predicted Pattern"
           : null,
         patternBadge: null,
-        predictions: status === "catch_all" ? candidates : [],
+        predictions: [],
         message: `${provider} reported ${status.replace("_", " ")}.`,
         probes,
       };
@@ -78,12 +78,12 @@ export async function verifyWithProvider(
   }
   return {
     ...base,
-    status: "pattern_prediction",
-    email: candidates[0] ?? null,
-    confidence: 38,
-    badge: base.badge ?? "PATTERN_PREDICTION (Port 25 Restricted / Dev Mode)",
-    predictions: candidates,
-    message: `${provider} could not confirm a recipient. Showing ranked patterns, not verified addresses.`,
+    status: "risky",
+    email: null,
+    confidence: 0,
+    badge: "Verification inconclusive",
+    predictions: [],
+    message: `${provider} could not confirm a recipient. No candidate was selected.`,
     probes,
   };
 }
