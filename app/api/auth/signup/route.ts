@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 const signupSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(254),
-  password: z.string().min(12).max(128).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/),
+  password: z.string().min(8).max(128).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/),
 });
 
 export async function POST(request: Request) {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     input = signupSchema.parse(await request.json());
   } catch {
-    return NextResponse.json({ error: "Use a valid name and email, and a 12+ character password with uppercase, lowercase, and a number." }, { status: 400 });
+    return NextResponse.json({ error: "Use a valid name and email, and an 8+ character password with uppercase, lowercase, and a number." }, { status: 400 });
   }
 
   const email = input.email.toLowerCase();
@@ -32,8 +32,8 @@ export async function POST(request: Request) {
 
     const passwordHash = await hash(input.password, 12);
     const user = await prisma.$transaction(async (transaction) => {
-      const created = await transaction.user.create({ data: { name: input.name, email, passwordHash, credits: 25 } });
-      await transaction.creditEvent.create({ data: { userId: created.id, delta: 25, reason: "signup_grant" } });
+      const created = await transaction.user.create({ data: { name: input.name, email, passwordHash, credits: 50 } });
+      await transaction.creditEvent.create({ data: { userId: created.id, delta: 50, reason: "signup_grant" } });
       return created;
     });
     return NextResponse.json({ userId: user.id }, { status: 201 });

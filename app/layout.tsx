@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./saas.css";
 import "./account.css";
+import "./trial.css";
 import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {

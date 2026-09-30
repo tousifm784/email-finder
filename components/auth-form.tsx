@@ -60,7 +60,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           <div className="auth-mobile-brand"><span className="brand-mark"><ShieldCheck size={18} /></span> signal.</div>
           <span className="panel-kicker">{mode === "signup" ? "START YOUR WORKSPACE" : "WELCOME BACK"}</span>
           <h2>{mode === "signup" ? "Create your account" : "Sign in to Signal"}</h2>
-          <p className="auth-description">{mode === "signup" ? "Get 25 email lookups on us." : "Pick up where your research left off."}</p>
+          <p className="auth-description">{mode === "signup" ? "Get 50 email lookups on us." : "Pick up where your research left off."}</p>
           {socialProviders.length > 0 && <>
             <div className="social-buttons">{socialProviders.map((provider) => <button className="social-button" key={provider.id} type="button" disabled={busy} onClick={() => void socialSignIn(provider.id)}>{provider.id === "github" ? <Github size={16} /> : <span className="google-g">G</span>} Continue with {provider.name}</button>)}</div>
             <div className="auth-divider"><span />or continue with email<span /></div>
@@ -68,10 +68,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           <form className="auth-fields" onSubmit={submit}>
             {mode === "signup" && <label className="field-wrap"><span className="field-label">YOUR NAME</span><span className="input-shell"><input autoComplete="name" required minLength={2} maxLength={80} value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex Morgan" /></span></label>}
             <label className="field-wrap"><span className="field-label">EMAIL ADDRESS</span><span className="input-shell"><input autoComplete="email" type="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@company.com" /></span></label>
-            <label className="field-wrap"><span className="field-label">PASSWORD</span><span className="input-shell"><input autoComplete={mode === "signup" ? "new-password" : "current-password"} type="password" required minLength={mode === "signup" ? 12 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "signup" ? "12+ characters" : "Your password"} /></span>{mode === "signup" && <span className="field-hint">12+ characters, including uppercase, lowercase and a number</span>}</label>
+            <label className="field-wrap"><span className="field-label">PASSWORD</span><span className="input-shell"><input autoComplete={mode === "signup" ? "new-password" : "current-password"} type="password" required minLength={mode === "signup" ? 8 : 1} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "signup" ? "8+ characters" : "Your password"} /></span>{mode === "signup" && <span className="field-hint">8+ characters, including uppercase, lowercase and a number</span>}</label>
             {error && <div className="error-banner">{error}</div>}
             <button className="submit-button auth-submit" type="submit" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : mode === "signup" ? <><span>Create account</span><ArrowRight size={16} /></> : <><span>Sign in</span><ArrowRight size={16} /></>}</button>
           </form>
+          {mode === "login" && <p className="auth-switch"><Link href="/forgot-password">Forgot your password?</Link></p>}
           <p className="auth-switch">{mode === "signup" ? "Already have an account?" : "New to Signal?"} <Link href={mode === "signup" ? "/login" : "/signup"}>{mode === "signup" ? "Log in" : "Create an account"}</Link></p>
           <div className="auth-terms"><ShieldCheck size={13} /> Passwords are hashed. Use HTTPS for account sessions.</div>
         </div>

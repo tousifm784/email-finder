@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { ArrowUpRight, BadgeCheck, Building2, Check, ChevronDown, CircleAlert, Clock3, Copy, Fingerprint, Globe2, LoaderCircle, Mail, Search, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import type { VerificationProgress, VerificationResult } from "@/lib/smtp-verifier";
@@ -41,12 +42,13 @@ export function FinderApp() {
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [conversionOpen, setConversionOpen] = useState(false);
   const account = useQuery({
     queryKey: ["account"],
     queryFn: async () => {
       const response = await fetch("/api/account", { cache: "no-store" });
       if (!response.ok) throw new Error("Could not load account");
-      return response.json() as Promise<{ credits: number; creditLimit: number }>;
+      return response.json() as Promise<{ credits: number; creditLimit: number; isGuest?: boolean }>;
     },
   });
 
@@ -58,8 +60,15 @@ export function FinderApp() {
         body: JSON.stringify(input),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Search could not be started.");
+      if (!response.ok) {
+        const error = new Error(body.error || "Search could not be started.") as Error & { code?: string };
+        error.code = body.code;
+        throw error;
+      }
       return body as { jobId: string };
+    },
+    onError: (error) => {
+      if ((error as Error & { code?: string }).code === "GUEST_LIMIT") setConversionOpen(true);
     },
     onSuccess: ({ jobId: nextId }) => {
       setJobId(nextId);
@@ -81,6 +90,7 @@ export function FinderApp() {
   const result = job.data?.result;
   const currentStep = phases.findIndex((phase) => phase.id === job.data?.progress);
   const busy = search.isPending || Boolean(jobId && job.data?.state !== "completed" && job.data?.state !== "failed");
+  const registeredOutOfCredits = account.data?.credits === 0 && !account.data.isGuest;
 
   useEffect(() => {
     if (job.data?.state === "completed") {
@@ -88,6 +98,15 @@ export function FinderApp() {
       void queryClient.invalidateQueries({ queryKey: ["account"] });
     }
   }, [job.data?.state, queryClient]);
+
+  useEffect(() => {
+    if (!conversionOpen) return;
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setConversionOpen(false);
+    };
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => window.removeEventListener("keydown", dismissOnEscape);
+  }, [conversionOpen]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,14 +140,14 @@ export function FinderApp() {
             <div className="form-grid">
               <label className="field-wrap"><span className="field-label">FULL NAME</span><span className="input-shell"><input autoComplete="name" required minLength={3} maxLength={120} placeholder="e.g. Sarah Connor" value={name} onChange={(event) => setName(event.target.value)} /><Sparkles size={16} /></span><span className="field-hint">First and last name</span></label>
               <label className="field-wrap"><span className="field-label">COMPANY DOMAIN</span><span className="input-shell"><span className="domain-prefix">https://</span><input autoCapitalize="none" autoComplete="url" required type="text" inputMode="url" placeholder="cyberdyne.com" value={domain} onChange={(event) => setDomain(event.target.value)} /><Globe2 size={16} /></span><span className="field-hint">No company name? Use its website</span></label>
-              <button className="submit-button" type="submit" disabled={busy || account.data?.credits === 0}><span>{account.data?.credits === 0 ? "No credits left" : busy ? "Searching" : "Find email"}</span>{busy ? <LoaderCircle className="spin" size={17} /> : <ArrowUpRight size={17} />}</button>
+              <button className="submit-button" type="submit" disabled={busy || registeredOutOfCredits}><span>{registeredOutOfCredits ? "No credits left" : busy ? "Searching" : "Find email"}</span>{busy ? <LoaderCircle className="spin" size={17} /> : <ArrowUpRight size={17} />}</button>
             </div>
             <div className="panel-foot"><span><Zap size={13} /> Queued, non-blocking verification</span><span><span className="keycap">Enter</span> to search</span></div>
           </form>
 
-          {account.data?.credits === 0 && <section className="upgrade-inline"><div><strong>You've used your included searches.</strong><span>Choose a plan to keep searching.</span></div><button type="button" onClick={() => setUpgradeOpen(true)}>Upgrade plan <ArrowUpRight size={13} /></button></section>}
+          {account.data?.credits === 0 && !account.data.isGuest && <section className="upgrade-inline"><div><strong>You're out of credits.</strong><span>Upgrade to keep searching.</span></div><button type="button" onClick={() => setUpgradeOpen(true)}>Upgrade plan <ArrowUpRight size={13} /></button></section>}
 
-          {(search.error || job.error || job.data?.error) && <div className="error-banner"><CircleAlert size={17} />{search.error?.message || job.error?.message || job.data?.error}</div>}
+          {!conversionOpen && (search.error || job.error || job.data?.error) && <div className="error-banner"><CircleAlert size={17} />{search.error?.message || job.error?.message || job.data?.error}</div>}
 
           {jobId && !result && !job.data?.error && (
             <section className="progress-panel" aria-live="polite">
@@ -157,7 +176,8 @@ export function FinderApp() {
               <button className="details-toggle" type="button" aria-expanded={detailsOpen} onClick={() => setDetailsOpen(!detailsOpen)}><span>Verification details <span className="details-count">{result.predictions.length || result.probes.length} patterns</span></span><ChevronDown size={16} className={detailsOpen ? "rotate" : ""} /></button>
               {detailsOpen && <div className="details-content">
                 <div className="detail-facts"><div><span>MAIL EXCHANGE</span><strong><Building2 size={14} />{result.mxHost || "Not resolved"}</strong></div><div><span>PROVIDER</span><strong>{result.provider}</strong></div><div><span>CATCH-ALL</span><strong className={result.catchAll ? "catch-value" : ""}>{result.catchAll === null ? "Unknown" : result.catchAll ? "Detected" : "Not detected"}</strong></div></div>
-                {result.predictions.length > 0 && <div className="probe-table"><div className="probe-head"><span>RANKED PATTERNS</span><span>NO. {result.predictions.length}</span></div>{result.predictions.map((email, index) => <div className="probe-row" key={email}><span>{String(index + 1).padStart(2, "0")} &nbsp; {email}</span><button className="copy-button" type="button" onClick={() => void copyEmail(email)} aria-label={`Copy ${email}`} title={`Copy ${email}`}>{copiedEmail === email ? <Check size={15} /> : <Copy size={15} />}</button></div>)}</div>}
+                <div className="dns-signals"><span>DNS POLICY</span><div><strong>SPF</strong><code>{result.spf || "No SPF TXT record found"}</code></div><div><strong>DMARC</strong><code>{result.dmarc || "No DMARC TXT record found"}</code></div></div>
+                {result.predictions.length > 0 && <div className="probe-table"><div className="probe-head"><span>RANKED PATTERNS</span><span>NO. {result.predictions.length}</span></div>{result.predictions.map((email, index) => <div className="probe-row" key={email}><span>{String(index + 1).padStart(2, "0")} &nbsp; {email}</span><span className="prediction-status">{result.predictionStatuses?.[index] || "Predicted"}</span><button className="copy-button" type="button" onClick={() => void copyEmail(email)} aria-label={`Copy ${email}`} title={`Copy ${email}`}>{copiedEmail === email ? <Check size={15} /> : <Copy size={15} />}</button></div>)}</div>}
                 {result.observedEmails.length > 0 && <div className="observed-evidence"><span>PUBLIC MATCHES</span><div>{result.observedEmails.map((email) => <code key={email}>{email}</code>)}</div></div>}
                 {result.probes.length > 0 && <div className="probe-table"><div className="probe-head"><span>EMAIL PATTERN</span><span>RESPONSE</span></div>{result.probes.map((probe) => <div className="probe-row" key={probe.email}><span>{probe.email}</span><span className={`probe-code ${probe.code && probe.code < 300 ? "accepted" : probe.code && probe.code >= 500 ? "rejected" : "pending"}`}>{probe.code ?? "—"}</span></div>)}</div>}
                 <div className="verification-foot"><BadgeCheck size={14} /> No message was sent during this verification.</div>
@@ -165,14 +185,15 @@ export function FinderApp() {
             </section>
           )}
 
-          <SearchHistory limit={5} />
+          {account.data && !account.data.isGuest && <SearchHistory limit={5} />}
 
           {!jobId && <div className="empty-state"><div className="empty-illustration"><span className="empty-ring ring-one" /><span className="empty-ring ring-two" /><span className="empty-center"><Mail size={19} /></span><span className="empty-spark spark-one">✳</span><span className="empty-spark spark-two">✳</span></div><h3>Every good introduction starts somewhere.</h3><p>Enter a name and company domain to uncover likely email patterns.</p></div>}
 
           <footer className="page-footer"><span>Signals, not guarantees. Mail server policies can change.</span><span>Built for thoughtful outreach <span className="footer-star">✳</span></span></footer>
         </div>
       </section>
-      {upgradeOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setUpgradeOpen(false); }}><section className="upgrade-modal" role="dialog" aria-modal="true" aria-labelledby="upgrade-title"><span className="panel-kicker">CREDITS EXHAUSTED</span><h2 id="upgrade-title">Upgrade plans are not available yet.</h2><p>Your 25 included searches have been used. Billing and paid credit packs are not configured in this deployment.</p><button className="submit-button" type="button" onClick={() => setUpgradeOpen(false)}>Close</button></section></div>}
+      {upgradeOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setUpgradeOpen(false); }}><section className="upgrade-modal" role="dialog" aria-modal="true" aria-labelledby="upgrade-title"><span className="panel-kicker">CREDITS EXHAUSTED</span><h2 id="upgrade-title">Upgrade plans are not available yet.</h2><p>Your 50 included searches have been used. Billing and paid credit packs are not configured in this deployment.</p><button className="submit-button" type="button" onClick={() => setUpgradeOpen(false)}>Close</button></section></div>}
+      {conversionOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setConversionOpen(false); }}><section className="upgrade-modal conversion-modal" role="dialog" aria-modal="true" aria-labelledby="conversion-title"><span className="panel-kicker">FREE TRIAL COMPLETE</span><h2 id="conversion-title">You've used all 10 free searches!</h2><p>Create a free account to unlock 50 additional credits, full deliverability breakdowns, and search history.</p><div className="conversion-actions"><Link autoFocus className="submit-button" href="/signup">Create Free Account (+50 Credits) <ArrowUpRight size={16} /></Link><Link className="conversion-login" href="/login">Log In</Link></div></section></div>}
     </main>
   );
 }

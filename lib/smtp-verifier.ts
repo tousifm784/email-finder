@@ -1,4 +1,4 @@
-import { lookup, resolveMx } from "node:dns/promises";
+import { lookup, resolveMx, resolveTxt } from "node:dns/promises";
 import { isIP, Socket } from "node:net";
 import { randomUUID } from "node:crypto";
 import { normalizeDomain } from "@/lib/domain";
@@ -24,6 +24,9 @@ export type VerificationResult = {
   message: string;
   checkedAt: string;
   probes: SmtpProbe[];
+  spf?: string | null;
+  dmarc?: string | null;
+  predictionStatuses?: string[];
 };
 
 type SmtpResponse = { code: number; message: string };
@@ -45,7 +48,7 @@ function classifyProvider(host: string, domain: string): string {
   if (domain === "linkedin.com" || domain.endsWith(".linkedin.com") || value.includes("linkedin")) return "LinkedIn Enterprise Gateway";
   if (value.endsWith(".google.com") || value.endsWith(".googlemail.com")) return "Google Workspace";
   if (value.includes("outlook.com") || value.includes("protection.outlook")) return "Microsoft 365";
-  if (value.includes("proofpoint") || value.endsWith(".pphosted.com")) return "Proofpoint";
+  if (value.includes("proofpoint") || value.endsWith(".pphosted.com") || value.endsWith(".ppe-hosted.com")) return "Proofpoint";
   if (value.includes("mimecast")) return "Mimecast";
   if (value.includes("zoho")) return "Zoho Mail";
   return "Custom mail server";
@@ -266,7 +269,7 @@ export async function verifyWithRemoteWorker(
   return { probes, catchAll: body.catchAll === true };
 }
 
-export async function verifyDomainAndCandidates(
+async function verifyDomainAndCandidatesCore(
   name: string,
   rawDomain: string,
   onProgress: (phase: VerificationProgress) => void | Promise<void> = () => undefined,
@@ -306,7 +309,7 @@ export async function verifyDomainAndCandidates(
           probes: remote.probes,
         };
       }
-      if (accepted) return { ...emptyResult(domain, "deliverable", "Remote SMTP worker accepted this recipient (250). No message was sent."), email: accepted.email, confidence: 97, mxHost: mx.host, provider: mx.provider, catchAll: false, badge: "Deliverable (250 OK)", probes: remote.probes };
+      if (accepted) return { ...emptyResult(domain, "deliverable", "Remote SMTP worker accepted this recipient (250). No message was sent."), email: accepted.email, confidence: 98, mxHost: mx.host, provider: mx.provider, catchAll: false, badge: "Deliverable (250 OK)", probes: remote.probes };
       const hardRejected = remote.probes.length > 0 && remote.probes.every((probe) => probe.code !== null && probe.code >= 500);
       if (hardRejected) return { ...emptyResult(domain, "undeliverable", "The remote SMTP worker rejected all candidate recipients."), confidence: 96, mxHost: mx.host, provider: mx.provider, catchAll: false, probes: remote.probes };
       return patternPredictionResult("pattern_prediction", domain, mx.host, mx.provider, candidates, "Remote SMTP Inconclusive / Predicted Pattern", "The remote worker did not receive a conclusive recipient response.", false);
@@ -351,7 +354,7 @@ export async function verifyDomainAndCandidates(
       };
     }
     if (accepted) {
-      return { status: "deliverable", email: accepted.email, confidence: 97, domain, mxHost: mx.host, provider: mx.provider, catchAll: false, badge: "Deliverable (250 OK)", patternBadge: null, predictions: [], pattern: null, observedEmails: [], message: "The mail server accepted this recipient during an SMTP handshake. No message was sent.", checkedAt: new Date().toISOString(), probes: result.probes };
+      return { status: "deliverable", email: accepted.email, confidence: 98, domain, mxHost: mx.host, provider: mx.provider, catchAll: false, badge: "Deliverable (250 OK)", patternBadge: null, predictions: [], pattern: null, observedEmails: [], message: "The mail server accepted this recipient during an SMTP handshake. No message was sent.", checkedAt: new Date().toISOString(), probes: result.probes };
     }
     if (rejected && !transient) {
       return { status: "undeliverable", email: null, confidence: 96, domain, mxHost: mx.host, provider: mx.provider, catchAll: false, badge: null, patternBadge: null, predictions: [], pattern: null, observedEmails: [], message: "All tested patterns were rejected by the mail server.", checkedAt: new Date().toISOString(), probes: result.probes };
@@ -378,4 +381,21 @@ export async function verifyDomainAndCandidates(
     }
     return { ...emptyResult(domain, "risky", error instanceof Error ? error.message : "SMTP verification failed."), mxHost: mx.host, provider: mx.provider };
   }
+}
+
+export async function verifyDomainAndCandidates(
+  name: string,
+  rawDomain: string,
+  onProgress: (phase: VerificationProgress) => void | Promise<void> = () => undefined,
+): Promise<VerificationResult> {
+  const result = await verifyDomainAndCandidatesCore(name, rawDomain, onProgress);
+  if (result.status === "domain_invalid") return result;
+
+  const [domainRecords, dmarcRecords] = await Promise.all([
+    resolveTxt(result.domain).catch(() => []),
+    resolveTxt(`_dmarc.${result.domain}`).catch(() => []),
+  ]);
+  const spf = domainRecords.map((record) => record.join("")).find((record) => /^v=spf1\b/i.test(record)) ?? null;
+  const dmarc = dmarcRecords.map((record) => record.join("")).find((record) => /^v=DMARC1\b/i.test(record)) ?? null;
+  return { ...result, spf, dmarc };
 }

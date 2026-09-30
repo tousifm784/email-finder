@@ -55,7 +55,8 @@ export const authOptions: NextAuthOptions = {
   },
   events: {
     async createUser({ user }) {
-      await prisma.creditEvent.create({ data: { userId: user.id, delta: 25, reason: "signup_grant" } });
+      await prisma.user.update({ where: { id: user.id }, data: { credits: 50 } });
+      await prisma.creditEvent.create({ data: { userId: user.id, delta: 50, reason: "signup_grant" } });
     },
   },
 };

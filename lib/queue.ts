@@ -1,7 +1,8 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
+import type { PatternDiscovery } from "@/lib/pattern-discovery";
 
-export type FindEmailJob = { name: string; domain: string; userId: string; searchId: string };
+export type FindEmailJob = { name: string; domain: string; userId?: string; guestSessionId?: string; searchId: string; knownPattern?: PatternDiscovery };
 
 export const redis = new Redis(process.env.REDIS_URL || "redis://127.0.0.1:6379", {
   maxRetriesPerRequest: 1,

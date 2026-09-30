@@ -1,0 +1,44 @@
+{
+  "executives": {
+    "jeff bezos@amazon.com": "jeff@amazon.com",
+    "andy jassy@amazon.com": "ajassy@amazon.com",
+    "satya nadella@microsoft.com": "satyan@microsoft.com",
+    "bill gates@gatesfoundation.org": "bill.gates@gatesfoundation.org",
+    "bill gates@microsoft.com": "billg@microsoft.com",
+    "tim cook@apple.com": "tcook@apple.com",
+    "sundar pichai@google.com": "sundar@google.com",
+    "mark zuckerberg@meta.com": "zuck@meta.com",
+    "elon musk@tesla.com": "elon@tesla.com"
+  },
+  "domains": {
+    "amazon.com": {
+      "primary_pattern": "{first}",
+      "secondary_pattern": "{f}{last}",
+      "confidence": 95
+    },
+    "microsoft.com": {
+      "primary_pattern": "{first}.{last}",
+      "secondary_pattern": "{first}{l}",
+      "confidence": 94
+    },
+    "gatesfoundation.org": {
+      "primary_pattern": "{first}.{last}",
+      "confidence": 96
+    },
+    "apple.com": {
+      "primary_pattern": "{f}{last}",
+      "secondary_pattern": "{first}.{last}",
+      "confidence": 95
+    },
+    "google.com": {
+      "primary_pattern": "{first}{last}",
+      "secondary_pattern": "{first}",
+      "confidence": 92
+    },
+    "meta.com": {
+      "primary_pattern": "{first}",
+      "secondary_pattern": "{first}{last}",
+      "confidence": 93
+    }
+  }
+}

@@ -14,13 +14,21 @@ model User {
   emailVerified DateTime?
   image         String?
   passwordHash  String?
-  credits       Int              @default(25)
+  credits       Int              @default(50)
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   accounts      Account[]
   sessions      Session[]
   searches      Search[]
   creditEvents  CreditEvent[]
+}
+
+model GuestSession {
+  id           String   @id
+  searchesUsed Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  searches     Search[]
 }
 
 model Account {
@@ -63,7 +71,8 @@ model VerificationToken {
 model Search {
   id             String   @id @default(cuid())
   jobId          String?  @unique
-  userId         String
+  userId         String?
+  guestSessionId String?
   targetName     String
   domain         String
   discoveredEmail String?
@@ -72,9 +81,11 @@ model Search {
   pattern        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([guestSessionId, createdAt])
 }
 
 model CreditEvent {

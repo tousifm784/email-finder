@@ -1,0 +1,8 @@
+[
+  { "provider": "Microsoft 365", "pattern": "first.last", "confidence": 85 },
+  { "provider": "Google Workspace", "pattern": "first.last", "confidence": 82 },
+  { "provider": "LinkedIn Enterprise Gateway", "pattern": "first.last", "confidence": 85 },
+  { "provider": "Proofpoint", "pattern": "first.last", "confidence": 75 },
+  { "provider": "Mimecast", "pattern": "first.last", "confidence": 75 },
+  { "provider": "*", "pattern": "f.last", "confidence": 65 }
+]

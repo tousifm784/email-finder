@@ -37,17 +37,16 @@ export function generatePermutations(fullName: string, domain: string): string[]
   const { first, last } = parseName(fullName);
   const normalizedDomain = normalizeDomain(domain);
   const firstInitial = first[0];
-  const lastInitial = last[0];
   const localParts = [
-    `${firstInitial}${last}`,
     `${first}.${last}`,
     first,
     `${first}${last}`,
-    `${firstInitial}.${last}`,
+    `${firstInitial}${last}`,
     `${first}_${last}`,
-    `${first}.${lastInitial}`,
+    `${first}.${last[0]}`,
+    `${firstInitial}.${last}`,
     `${last}.${first}`,
-    `${firstInitial}${lastInitial}`,
+    last,
     `${first}-${last}`,
   ];
 

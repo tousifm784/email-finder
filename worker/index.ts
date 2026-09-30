@@ -16,7 +16,35 @@ const worker = new Worker<FindEmailJob, VerificationResult, VerificationProgress
   "email-verification",
   async (job) => {
     try {
-      let result = await verifyDomainAndCandidates(job.data.name, job.data.domain, (phase) => job.updateProgress(phase));
+      let result: VerificationResult;
+      if (job.data.knownPattern) {
+        const known = job.data.knownPattern;
+        const candidatePatterns = generatePermutations(job.data.name, job.data.domain);
+        const predictions = [...new Set([known.email, ...known.alternates, ...candidatePatterns])];
+        const knownCount = 1 + known.alternates.length;
+        const executiveRecord = known.source === "executive-record";
+        result = {
+          status: "pattern_prediction",
+          email: known.email,
+          confidence: known.confidence,
+          domain: job.data.domain,
+          mxHost: null,
+          provider: "Company intelligence",
+          catchAll: null,
+          badge: executiveRecord ? "Verified Executive Record" : `Verified Company Formula (${known.confidence}%)`,
+          patternBadge: null,
+          predictions,
+          predictionStatuses: predictions.map((_email, index) => index < knownCount ? (executiveRecord ? "executive record" : "company formula") : "predicted"),
+          pattern: known.formula,
+          observedEmails: [],
+          message: executiveRecord
+            ? "Matched a curated executive directory record. This is a documented address, not a live SMTP confirmation."
+            : `Matched the curated ${known.formula} company formula. The address is not live SMTP-confirmed.`,
+          checkedAt: new Date().toISOString(),
+          probes: [],
+        };
+      } else {
+      result = await verifyDomainAndCandidates(job.data.name, job.data.domain, (phase) => job.updateProgress(phase));
       if (["risky", "pattern_prediction", "catch_all"].includes(result.status) && result.mxHost) {
         const candidates = generatePermutations(job.data.name, job.data.domain);
         const fallbackResult = await verifyWithProvider(result, candidates);
@@ -30,9 +58,10 @@ const worker = new Worker<FindEmailJob, VerificationResult, VerificationProgress
             ...discoveryBase,
             email: discovery.email,
             confidence: discovery.confidence,
-            badge: onlineMatch && discoveryBase.status !== "catch_all" ? "Pattern Verified (Online Match)" : discoveryBase.status === "catch_all" ? discoveryBase.badge : "Pattern Estimated (65%)",
+            badge: onlineMatch && discoveryBase.status !== "catch_all" ? "Pattern Verified (Online Match)" : discoveryBase.status === "catch_all" ? discoveryBase.badge : `Pattern Estimated (${discovery.confidence}%)`,
             patternBadge: onlineMatch && discoveryBase.status === "catch_all" ? "Pattern Verified (Online Match)" : null,
             predictions,
+            predictionStatuses: predictions.map(() => "predicted"),
             pattern: discovery.formula,
             observedEmails: discovery.observedEmails,
             message: onlineMatch
@@ -40,6 +69,7 @@ const worker = new Worker<FindEmailJob, VerificationResult, VerificationProgress
               : `No matching public email pattern was found. ${discovery.pattern} is an MX-provider estimate, not a verified mailbox.`,
           };
         }
+      }
       }
       await job.updateProgress("complete");
       await prisma.search.update({
